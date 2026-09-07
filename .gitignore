@@ -1,0 +1,25 @@
+# Binaries
+/bin/
+*.exe
+
+# Env
+.env
+.env.local
+
+# IDE
+.idea/
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Frontend
+/frontend/node_modules/
+/frontend/dist/
+
+# Storage
+/storage/
+
+# Logs
+*.log
