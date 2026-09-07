@@ -2,12 +2,25 @@ package main
 
 import (
 	"log"
-	"net/http"
+
+	"go.uber.org/zap"
+
+	"github.com/zht475706171/TaiSang-KB/internal/config"
+	"github.com/zht475706171/TaiSang-KB/internal/logger"
 )
 
 func main() {
-	log.Println("TaiSang-KB starting...")
-	if err := http.ListenAndServe("127.0.0.1:8080", nil); err != nil {
+	if err := logger.Init(); err != nil {
 		log.Fatal(err)
 	}
+	defer logger.Sync()
+
+	cfg, err := config.Load()
+	if err != nil {
+		logger.L.Fatal("config load failed", zap.Error(err))
+	}
+	logger.L.Info("config loaded",
+		zap.String("addr", cfg.ListenAddr),
+		zap.String("storage", cfg.StorageDir),
+	)
 }
