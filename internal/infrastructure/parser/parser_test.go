@@ -71,3 +71,20 @@ func TestParse_PDF(t *testing.T) {
 		t.Errorf("empty extraction")
 	}
 }
+
+func TestParse_DOCX(t *testing.T) {
+	body := readFixture(t, "sample.docx")
+	if len(body) == 0 {
+		t.Skip("sample.docx not present")
+	}
+	got, err := Parse(body, "sample.docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(got, "DOCX 测试段落一") {
+		t.Errorf("missing text: %q", got)
+	}
+	if !strings.Contains(got, "第二段落") {
+		t.Errorf("missing second para: %q", got)
+	}
+}

@@ -1,8 +1,11 @@
 package parser
 
 import (
+	"archive/zip"
 	"bytes"
+	"encoding/xml"
 	"fmt"
+	"io"
 	"strings"
 
 	"github.com/ledongthuc/pdf"
@@ -21,7 +24,9 @@ func Parse(body []byte, filename, mimeType string) (string, error) {
 		return parseHTML(body), nil
 	case ext == ".pdf":
 		return parsePDF(body)
-	// NOTE: DOCX/XLSX/PPTX branches are added in later tasks (Task 5-7)
+	case ext == ".docx":
+		return parseDocx(body)
+	// NOTE: XLSX/PPTX branches are added in later tasks (Task 6-7)
 	// when the corresponding parseXxx functions are implemented.
 	default:
 		return "", fmt.Errorf("unsupported file type: name=%s mime=%s", filename, mimeType)
@@ -125,4 +130,68 @@ func parsePDF(body []byte) (string, error) {
 		b.WriteString("\n")
 	}
 	return b.String(), nil
+}
+
+// parseDocx extracts plain text from a .docx (Office Open XML WordprocessingML)
+// package using only the standard library. A .docx is a zip archive whose main
+// content lives at word/document.xml; paragraphs are <w:p> and text runs hold
+// <w:t> elements. We concatenate <w:t> text and separate paragraphs with "\n".
+func parseDocx(body []byte) (string, error) {
+	zr, err := zip.NewReader(bytes.NewReader(body), int64(len(body)))
+	if err != nil {
+		return "", fmt.Errorf("docx open zip: %w", err)
+	}
+	var docXML []byte
+	for _, f := range zr.File {
+		if f.Name == "word/document.xml" {
+			rc, err := f.Open()
+			if err != nil {
+				return "", err
+			}
+			docXML, err = io.ReadAll(rc)
+			rc.Close()
+			if err != nil {
+				return "", err
+			}
+			break
+		}
+	}
+	if docXML == nil {
+		return "", fmt.Errorf("docx: word/document.xml not found")
+	}
+	return extractDocxText(docXML), nil
+}
+
+// extractDocxText walks the document.xml token stream, appending text from
+// <w:t> elements and emitting a newline at each <w:p> boundary.
+func extractDocxText(data []byte) string {
+	const wNS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+	dec := xml.NewDecoder(bytes.NewReader(data))
+	var b strings.Builder
+	inT := false
+	for {
+		tok, err := dec.Token()
+		if err != nil {
+			break
+		}
+		switch t := tok.(type) {
+		case xml.StartElement:
+			if t.Name.Local == "t" && t.Name.Space == wNS {
+				inT = true
+			} else if t.Name.Local == "p" && t.Name.Space == wNS {
+				if b.Len() > 0 {
+					b.WriteString("\n")
+				}
+			}
+		case xml.CharData:
+			if inT {
+				b.Write(t)
+			}
+		case xml.EndElement:
+			if t.Name.Local == "t" && t.Name.Space == wNS {
+				inT = false
+			}
+		}
+	}
+	return b.String()
 }
