@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/ledongthuc/pdf"
 	"golang.org/x/net/html"
 )
 
@@ -18,7 +19,9 @@ func Parse(body []byte, filename, mimeType string) (string, error) {
 		return string(body), nil
 	case isHTML(mimeType, ext):
 		return parseHTML(body), nil
-	// NOTE: PDF/DOCX/XLSX/PPTX branches are added in later tasks (Task 4-7)
+	case ext == ".pdf":
+		return parsePDF(body)
+	// NOTE: DOCX/XLSX/PPTX branches are added in later tasks (Task 5-7)
 	// when the corresponding parseXxx functions are implemented.
 	default:
 		return "", fmt.Errorf("unsupported file type: name=%s mime=%s", filename, mimeType)
@@ -100,4 +103,26 @@ func parseHTML(body []byte) string {
 	}
 	walk(doc)
 	return b.String()
+}
+
+func parsePDF(body []byte) (string, error) {
+	r, err := pdf.NewReader(bytes.NewReader(body), int64(len(body)))
+	if err != nil {
+		return "", fmt.Errorf("pdf reader: %w", err)
+	}
+	var b strings.Builder
+	n := r.NumPage()
+	for i := 1; i <= n; i++ {
+		page := r.Page(i)
+		if page.V.IsNull() {
+			continue
+		}
+		text, err := page.GetPlainText(nil)
+		if err != nil {
+			continue
+		}
+		b.WriteString(text)
+		b.WriteString("\n")
+	}
+	return b.String(), nil
 }

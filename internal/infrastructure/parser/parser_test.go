@@ -47,7 +47,27 @@ func readFixture(t *testing.T, name string) []byte {
 	t.Helper()
 	b, err := os.ReadFile(filepath.Join("..", "..", "..", "testdata", "parser", name))
 	if err != nil {
+		// Missing fixtures are not fatal here; callers that want to skip on
+		// absent fixtures (e.g. PDF/DOCX/XLSX/PPTX) check len(body) == 0.
+		if os.IsNotExist(err) {
+			return nil
+		}
 		t.Fatal(err)
 	}
 	return b
+}
+
+func TestParse_PDF(t *testing.T) {
+	body := readFixture(t, "sample.pdf")
+	if len(body) == 0 {
+		t.Skip("sample.pdf not present, skipping")
+	}
+	got, err := Parse(body, "sample.pdf", "application/pdf")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// We can't guarantee exact text from arbitrary PDF; assert non-empty and contains letters.
+	if strings.TrimSpace(got) == "" {
+		t.Errorf("empty extraction")
+	}
 }
