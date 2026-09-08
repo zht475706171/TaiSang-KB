@@ -31,7 +31,11 @@ func main() {
 	}
 	logger.L.Info("db migrated")
 
-	r := router.New(db)
+	r := router.New(db, router.Config{
+		ListenAddr:    cfg.ListenAddr,
+		StorageDir:    cfg.StorageDir,
+		EncryptionKey: cfg.EncryptionKey,
+	})
 	logger.L.Info("listening", zap.String("addr", cfg.ListenAddr))
 	if err := r.Run(cfg.ListenAddr); err != nil {
 		logger.L.Fatal("server stopped", zap.Error(err))

@@ -8,7 +8,9 @@ import (
 )
 
 func TestHealthEndpoint(t *testing.T) {
-	r := New(nil) // nil db for health (just returns ok)
+	// db == nil: router fast-path returns engine with only /api/health registered,
+	// so NewServices is never called and no encryption key / DB plumbing is needed.
+	r := New(nil, Config{})
 	req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
