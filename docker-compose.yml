@@ -16,5 +16,37 @@ services:
       timeout: 3s
       retries: 10
 
+  backend:
+    build:
+      context: .
+      dockerfile: docker/backend.Dockerfile
+    container_name: tsk-backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      TSK_DB_DSN: postgres://tsk:tsk@postgres:5432/taisang?sslmode=disable
+      TSK_LISTEN_ADDR: 0.0.0.0:8080
+      TSK_STORAGE_DIR: /data/storage
+      TSK_ENCRYPTION_KEY: ${TSK_ENCRYPTION_KEY}
+      TSK_EMBEDDING_DIM: 1536
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - tsk_storage:/data/storage
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/frontend.Dockerfile
+    container_name: tsk-frontend
+    depends_on:
+      - backend
+    ports:
+      - "127.0.0.1:8081:80"
+    restart: unless-stopped
+
 volumes:
   tsk_pg:
+  tsk_storage:
