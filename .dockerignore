@@ -1,0 +1,13 @@
+.git
+.github
+.idea
+.vscode
+bin/
+frontend/node_modules/
+frontend/dist/
+storage/
+*.log
+.env
+.env.local
+docs/
+testdata/
