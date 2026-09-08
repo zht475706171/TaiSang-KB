@@ -6,6 +6,7 @@ require (
 	github.com/gin-gonic/gin v1.12.0
 	github.com/google/uuid v1.6.0
 	github.com/ledongthuc/pdf v0.0.0-20260907135840-6c8c28e0e8a0
+	github.com/pgvector/pgvector-go v0.4.1
 	go.uber.org/zap v1.28.0
 	golang.org/x/net v0.58.0
 	gorm.io/datatypes v1.2.7
