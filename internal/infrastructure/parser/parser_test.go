@@ -88,3 +88,20 @@ func TestParse_DOCX(t *testing.T) {
 		t.Errorf("missing second para: %q", got)
 	}
 }
+
+func TestParse_XLSX(t *testing.T) {
+	body := readFixture(t, "sample.xlsx")
+	if len(body) == 0 {
+		t.Skip("sample.xlsx not present")
+	}
+	got, err := Parse(body, "sample.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(got, "XLSX 单元格 A1") {
+		t.Errorf("missing cell: %q", got)
+	}
+	if !strings.Contains(got, "第二行 B1") {
+		t.Errorf("missing row2: %q", got)
+	}
+}

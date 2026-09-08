@@ -26,8 +26,9 @@ func Parse(body []byte, filename, mimeType string) (string, error) {
 		return parsePDF(body)
 	case ext == ".docx":
 		return parseDocx(body)
-	// NOTE: XLSX/PPTX branches are added in later tasks (Task 6-7)
-	// when the corresponding parseXxx functions are implemented.
+	case ext == ".xlsx":
+		return parseXlsx(body)
+	// NOTE: PPTX branch is added in a later task when parsePptx is implemented.
 	default:
 		return "", fmt.Errorf("unsupported file type: name=%s mime=%s", filename, mimeType)
 	}
@@ -190,6 +191,166 @@ func extractDocxText(data []byte) string {
 		case xml.EndElement:
 			if t.Name.Local == "t" && t.Name.Space == wNS {
 				inT = false
+			}
+		}
+	}
+	return b.String()
+}
+
+// parseXlsx extracts plain text from a .xlsx (Office Open XML SpreadsheetML)
+// package using only the standard library. A .xlsx is a zip archive; we read
+// xl/sharedStrings.xml to build the shared string table and then walk
+// xl/worksheets/sheet1.xml row by row. String cells (t="s") hold a <v> index
+// into sharedStrings; numeric/other cells hold the literal value in <v>.
+// Cells are joined with "\t", rows with "\n".
+func parseXlsx(body []byte) (string, error) {
+	zr, err := zip.NewReader(bytes.NewReader(body), int64(len(body)))
+	if err != nil {
+		return "", fmt.Errorf("xlsx open zip: %w", err)
+	}
+	var sharedStrings []string
+	var sheetXML []byte
+	for _, f := range zr.File {
+		switch f.Name {
+		case "xl/sharedStrings.xml":
+			rc, err := f.Open()
+			if err != nil {
+				return "", err
+			}
+			data, err := io.ReadAll(rc)
+			rc.Close()
+			if err != nil {
+				return "", err
+			}
+			sharedStrings = parseSharedStrings(data)
+		case "xl/worksheets/sheet1.xml":
+			rc, err := f.Open()
+			if err != nil {
+				return "", err
+			}
+			sheetXML, err = io.ReadAll(rc)
+			rc.Close()
+			if err != nil {
+				return "", err
+			}
+		}
+	}
+	if sheetXML == nil {
+		return "", fmt.Errorf("xlsx: sheet1.xml not found")
+	}
+	return parseSheet(sheetXML, sharedStrings), nil
+}
+
+// parseSharedStrings decodes the sharedStrings.xml token stream. Each <si>
+// holds one shared string; its text comes from <t> children, either directly
+// (<si><t>...</t></si>) or via rich text runs (<si><r><t>...</t></r>...).
+// We concatenate all <t> text within an <si>.
+func parseSharedStrings(data []byte) []string {
+	const sNS = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+	dec := xml.NewDecoder(bytes.NewReader(data))
+	var result []string
+	inSI := false
+	inT := false
+	var cur strings.Builder
+	for {
+		tok, err := dec.Token()
+		if err != nil {
+			break
+		}
+		switch t := tok.(type) {
+		case xml.StartElement:
+			if t.Name.Space != sNS {
+				continue
+			}
+			if t.Name.Local == "si" {
+				inSI = true
+				cur.Reset()
+			} else if t.Name.Local == "t" {
+				inT = true
+			}
+		case xml.CharData:
+			if inSI && inT {
+				cur.Write(t)
+			}
+		case xml.EndElement:
+			if t.Name.Space != sNS {
+				continue
+			}
+			if t.Name.Local == "t" {
+				inT = false
+			} else if t.Name.Local == "si" {
+				inSI = false
+				result = append(result, cur.String())
+			}
+		}
+	}
+	return result
+}
+
+// parseSheet decodes sheet1.xml. <row> boundaries separate output lines;
+// <c> elements are cells (attribute t="s" means string-indexed); <v> holds
+// the cell value (index for strings, literal otherwise). Cells are joined
+// with "\t", non-empty rows emitted with "\n".
+func parseSheet(data []byte, shared []string) string {
+	const sNS = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+	dec := xml.NewDecoder(bytes.NewReader(data))
+	var b strings.Builder
+	var rowCells []string
+	inV := false
+	cellType := ""
+	var cellVal strings.Builder
+	for {
+		tok, err := dec.Token()
+		if err != nil {
+			break
+		}
+		switch t := tok.(type) {
+		case xml.StartElement:
+			if t.Name.Space != sNS {
+				continue
+			}
+			switch t.Name.Local {
+			case "row":
+				rowCells = rowCells[:0]
+			case "c":
+				cellType = ""
+				cellVal.Reset()
+				for _, attr := range t.Attr {
+					if attr.Name.Local == "t" {
+						cellType = attr.Value
+					}
+				}
+			case "v":
+				inV = true
+			}
+		case xml.CharData:
+			if inV {
+				cellVal.Write(t)
+			}
+		case xml.EndElement:
+			if t.Name.Space != sNS {
+				continue
+			}
+			switch t.Name.Local {
+			case "v":
+				inV = false
+			case "c":
+				v := cellVal.String()
+				if cellType == "s" {
+					var idx int
+					if n, err := fmt.Sscanf(v, "%d", &idx); err == nil && n == 1 && idx >= 0 && idx < len(shared) {
+						v = shared[idx]
+					} else {
+						v = ""
+					}
+				}
+				rowCells = append(rowCells, v)
+			case "row":
+				line := strings.Join(rowCells, "\t")
+				if strings.TrimSpace(line) != "" {
+					b.WriteString(line)
+					b.WriteString("\n")
+				}
 			}
 		}
 	}
