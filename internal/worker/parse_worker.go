@@ -121,9 +121,9 @@ func (w *ParseWorker) process(doc *models.Document) error {
 		return fmt.Errorf("parse: %w", err)
 	}
 	chunks, err := w.chunkFn(text, chunker.SplitOptions{
-		ParentTarget: 800,
-		ChildTarget:  256,
-		ChildOverlap: 50,
+		ParentTarget: 4096,
+		ChildTarget:  384,
+		ChildOverlap: 76, // 76 = 384/5, WeKnora 默认 overlap 比例
 	})
 	if err != nil {
 		return fmt.Errorf("chunk: %w", err)
