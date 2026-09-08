@@ -21,6 +21,9 @@ RUN apk add --no-cache ca-certificates tzdata && \
 WORKDIR /app
 COPY --from=builder /out/server /app/server
 
+# Create storage dir owned by app so non-root runtime can write uploads.
+RUN mkdir -p /data/storage && chown -R 10001:10001 /data
+
 USER app
 EXPOSE 8080
 
